@@ -1,0 +1,38 @@
+model:
+  base_learning_rate: 4.5e-6
+  target: taming.models.vqdiff_simple.VQDiffSimpleModel
+  params:
+    embed_dim: 256
+    n_embed: 1024
+    ddconfig1:
+      double_z: False
+      z_channels: 256
+      resolution: 256
+      in_channels: 3
+      out_ch: 3
+      ch: 128
+      ch_mult: [ 1,1,2,2,4]  # num_down = len(ch_mult)-1
+      num_res_blocks: 2
+      attn_resolutions: [16]
+      dropout: 0.0
+
+    lossconfig:
+      target: taming.modules.losses.VQL1loss.VQL1loss
+      params:
+        codebook_weight: 1.0
+
+data:
+  target: main.DataModuleFromConfig
+  params:
+    batch_size: 12
+    num_workers: 24
+    train:
+      target: taming.data.frame_diff.FrameDiffTarIterDataset
+      params:
+        tarpath: /dataset/fd5061f6/HWY/cogdata_video/cogdata_task_video17frame_tar/howto100m_animal/howto100m_animal.tar.part_0.cogdata
+    validation:
+      target: taming.data.frame_diff.FrameDiffTarIterDataset
+      params:
+        tarpath: /dataset/fd5061f6/HWY/cogdata_video/cogdata_task_video17frame_tar/howto100m_animal/howto100m_animal.tar.part_1.cogdata
+
+# use frame2-frame1 as ground truth
