@@ -45,6 +45,7 @@ class VQDiffModel3(pl.LightningModule):
             self.monitor = monitor
 
     def init_from_ckpt(self, path, ignore_keys=list()):
+        print("Init from ckpt:", path)
         sd = torch.load(path, map_location="cpu")["state_dict"]
         keys = list(sd.keys())
         for k in keys:

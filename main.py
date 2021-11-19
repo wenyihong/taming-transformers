@@ -212,10 +212,11 @@ class SetupCallback(Callback):
                 dst, name = os.path.split(self.logdir)
                 dst = os.path.join(dst, "child_runs", name)
                 os.makedirs(os.path.split(dst)[0], exist_ok=True)
-                try:
-                    os.rename(self.logdir, dst)
-                except FileNotFoundError:
-                    pass
+                # i don't know if it's ok but it rm the dir created by rank0
+                # try:
+                #     os.rename(self.logdir, dst)
+                # except FileNotFoundError:
+                #     pass
 
 
 class ImageLogger(Callback):
@@ -321,6 +322,43 @@ class ImageLogger(Callback):
 
     def on_validation_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
         self.log_img(pl_module, batch, batch_idx, split="val")
+        
+        
+class CheckpointEveryNSteps(pl.Callback):
+    """
+    Save a checkpoint every N steps, instead of Lightning's default that checkpoints
+    based on validation loss.
+    """
+
+    def __init__(
+        self,
+        save_step_frequency,
+        prefix="N-Step-Checkpoint",
+        use_modelcheckpoint_filename=False,
+    ):
+        """
+        Args:
+            save_step_frequency: how often to save in steps
+            prefix: add a prefix to the name, only used if
+                use_modelcheckpoint_filename=False
+            use_modelcheckpoint_filename: just use the ModelCheckpoint callback's
+                default filename, don't use ours.
+        """
+        self.save_step_frequency = save_step_frequency
+        self.prefix = prefix
+        self.use_modelcheckpoint_filename = use_modelcheckpoint_filename
+
+    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
+        """ Check if we should save a checkpoint after every train batch """
+        epoch = trainer.current_epoch
+        global_step = trainer.global_step
+        if global_step % self.save_step_frequency == 0:
+            if self.use_modelcheckpoint_filename:
+                filename = trainer.checkpoint_callback.filename
+            else:
+                filename = f"{self.prefix}_{epoch=}_{global_step=}.ckpt"
+            ckpt_path = os.path.join(trainer.checkpoint_callback.dirpath, filename)
+            trainer.save_checkpoint(ckpt_path)
 
 
 
@@ -512,8 +550,8 @@ if __name__ == "__main__":
             "image_logger": {
                 "target": "main.ImageLogger",
                 "params": {
-                    "batch_frequency": 750,
-                    "max_images": 4,
+                    "batch_frequency": 375,
+                    "max_images": 8,
                     "clamp": True
                 }
             },
@@ -522,6 +560,12 @@ if __name__ == "__main__":
                 "params": {
                     "logging_interval": "step",
                     #"log_momentum": True
+                }
+            },
+            "ckpt_saver": {
+                "target": "main.CheckpointEveryNSteps",
+                "params": {
+                    "save_step_frequency": 5000,
                 }
             },
         }

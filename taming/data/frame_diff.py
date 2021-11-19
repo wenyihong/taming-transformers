@@ -73,15 +73,20 @@ class FrameDiffTarDataset(Dataset):
         return {'image': torch.cat(frames, dim=0)}
 
 class FrameDiffTarIterDataset(IterableDataset):
-    def __init__(self, tarpath=""):
+    def __init__(self, tarpath="", diff_filter=None):
         self.tarpath = tarpath
         self.tar = tarfile.open(tarpath, 'r', bufsize=16*1024*1024) 
         self.frames_per_clip = 16 # 17 actually, with 16 framepairs
         self.endframe_idx = str(self.frames_per_clip).zfill(4)
         self.last_frame = None
         self.cnt = 0
+        self.tar.close()
+        self.tar = None
+        self.diff_filter = diff_filter
     
     def __iter__(self):
+        if self.tar is None:
+            self.tar = tarfile.open(self.tarpath, 'r', bufsize=16*1024*1024) 
         for info in self.tar:
             self.cnt += 1
             file = tarfile.ExFileObject(self.tar, info)
@@ -92,6 +97,23 @@ class FrameDiffTarIterDataset(IterableDataset):
             tmp_frame = (tmp_frame/127.5 -1.0).astype(np.float32)
             tmp_frame = torch.from_numpy(tmp_frame).unsqueeze(0)
             
+            if self.last_frame is None:
+                assert info.name.split('/')[-1] == 'frame_0000.jpg'
+                self.last_frame = tmp_frame
+                continue
+            
+            # check difference
+            if self.diff_filter is not None:
+                frame_diff = torch.abs(tmp_frame-self.last_frame)
+                diff_mean = torch.mean(frame_diff, dim=[-1, -2, -3])
+                if diff_mean <= self.diff_filter:
+                    if info.name.split('/')[-1] == f'frame_{self.endframe_idx}.jpg':
+                        self.last_frame = None
+                        continue
+                    else:
+                        self.last_frame = tmp_frame
+                        continue
+            
             # cal gradient
             grad_tmp_frame_x = cv2.Sobel(cv2_tmp_frame, ddepth=cv2.CV_64F, dx=1, dy=0, ksize=-1)
             grad_tmp_frame_y = cv2.Sobel(cv2_tmp_frame, ddepth=cv2.CV_64F, dx=0, dy=1, ksize=-1)
@@ -101,10 +123,7 @@ class FrameDiffTarIterDataset(IterableDataset):
             grad_map = np.array(PIL_grad_map/255.0).astype(np.float32)
             grad_map = torch.from_numpy(grad_map)
             
-            if self.last_frame is None:
-                assert info.name.split('/')[-1] == 'frame_0000.jpg'
-                self.last_frame = tmp_frame
-                continue
+
             
             self.now_frame = tmp_frame
             self.now_grad_map = grad_map

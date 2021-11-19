@@ -1,0 +1,65 @@
+model:
+  base_learning_rate: 5e-6
+  target: taming.models.vqdiff3.VQDiffModel3
+  params:
+    embed_dim: 256
+    n_embed: 1024
+    encconfig:
+      double_z: False
+      z_channels: 256
+      resolution: 256
+      in_channels: 3
+      out_ch: 3
+      ch: 128
+      ch_mult: [ 1,1,2,2,4]  # num_down = len(ch_mult)-1
+      mid_input_channel_mult: [1, 1, 1, 2, 2]
+      num_res_blocks: 3
+      attn_resolutions: [16]
+      dropout: 0.0
+      custom_kernelsize: [[11, 9, 7, 5, 3], [3, 3, 3, 3, 3]]
+    decconfig:
+      double_z: False
+      z_channels: 256
+      resolution: 256
+      in_channels: 3
+      out_ch: 3
+      ch: 128 
+      ch_mult: [4, 2, 2, 1, 1]  # num_up = len(ch_mult)-1
+      mid_input_channel_mult: [2, 2, 1, 1, 1]
+      num_res_blocks: 3
+      attn_resolutions: [16]
+      dropout: 0.0
+      custom_kernelsize: [[3, 5, 7, 9, 11], [3, 3, 3, 3, 3]]
+    branch_encconfig:
+      double_z: False
+      z_channels: 256
+      resolution: 256
+      in_channels: 3
+      out_ch: 3
+      ch: 128
+      ch_mult: [ 1,1,2,2,4]  # num_down = len(ch_mult)-1
+      num_res_blocks: 2
+      attn_resolutions: [16]
+      dropout: 0.0
+      custom_kernelsize: [[11, 9, 7, 5, 3], [3, 3, 3, 3, 3]]
+
+    lossconfig:
+      target: taming.modules.losses.VQL1loss.VQL1GradmaskPerceptualloss
+      params:
+        codebook_weight: 1.0
+        use_grad: False
+        use_percep: True
+        perceptual_weight: 0.5
+        pixelloss_weight: 1.0
+        gradloss_weight: 0.0
+
+data:
+  target: main.DataModuleFromConfig
+  params:
+    batch_size: 8
+    num_workers: 16
+    train:
+      target: taming.data.frame_diff.FrameDiffTarIterDataset
+      params:
+        tarpath: /dataset/fd5061f6/HWY/cogdata_video/cogdata_task_video17frame_tar/howto100m_animal/howto100m_animal.tar.part_0.cogdata
+# use frame2-frame1 as ground truth

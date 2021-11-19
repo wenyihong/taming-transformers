@@ -63,7 +63,6 @@ class VQDiffModel2(pl.LightningModule):
     
     def decode(self, quant, x1):
         quant = self.post_quant_conv(quant)
-        breakpoint()
         branch_mid_output = self.branch_encoder(x1)
         branch_mid_output.reverse()
         dec = self.decoder(quant, mid_input=branch_mid_output)
